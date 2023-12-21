@@ -19,7 +19,10 @@ internal static class Program
 .|....-|.\
 ..//.|....");
         Console.WriteLine(Part1(sample.EnumerateLines()));
+        Console.WriteLine(Part1(File.OpenText("input.txt").EnumerateLines()));
         
+        Console.WriteLine(Part2(sample.EnumerateLines()));
+        Console.WriteLine(Part2(File.OpenText("input.txt").EnumerateLines()));
     }
 
     private static uint Part1(IEnumerable<string> lines)
@@ -28,9 +31,57 @@ internal static class Program
             .Select(it => it.ToCharArray())
             .Select(it => it.Select(c => new Tile(c)).ToArray())
             .ToArray();
+        return Energize(new Beam(-1, 0, Direction.Right), grid);
+    }
+    
+    private static uint Part2(IEnumerable<string> lines)
+    {
+        Tile[][] grid = lines
+            .Select(it => it.ToCharArray())
+            .Select(it => it.Select(c => new Tile(c)).ToArray())
+            .ToArray();
 
+        uint tilesEnergized = 0;
+        uint newTilesEnergized = 0;
+        // left and right border
+        for (int y = 0; y < grid.Length; y++)
+        {
+            newTilesEnergized = Energize(new Beam(-1, y, Direction.Right), grid);
+            Console.WriteLine($"{newTilesEnergized} tiles energized with beam starting at -1|{y} ->");
+            if (newTilesEnergized > tilesEnergized) 
+                tilesEnergized = newTilesEnergized;
+            Reset(grid);
+                
+            newTilesEnergized = Energize(new Beam(grid[0].Length, y, Direction.Left), grid);
+            Console.WriteLine($"{newTilesEnergized} tiles energized with beam starting at {grid[0].Length}|{y} <-");
+            if (newTilesEnergized > tilesEnergized) 
+                tilesEnergized = newTilesEnergized;
+            Reset(grid);
+        }
+        
+        // top and bottom border
+        for (int x = 0; x < grid[0].Length; x++)
+        {
+            newTilesEnergized = Energize(new Beam(x, -1, Direction.Down), grid);
+            Console.WriteLine($"{newTilesEnergized} tiles energized with beam starting at {x}|-1 v");
+            if (newTilesEnergized > tilesEnergized) 
+                tilesEnergized = newTilesEnergized;
+            Reset(grid);
+                
+            newTilesEnergized = Energize(new Beam(x, grid.Length, Direction.Up), grid);
+            Console.WriteLine($"{newTilesEnergized} tiles energized with beam starting at {x}|{grid.Length} ^");
+            if (newTilesEnergized > tilesEnergized) 
+                tilesEnergized = newTilesEnergized;
+            Reset(grid);
+        }
+
+        return tilesEnergized;
+    }
+
+    private static uint Energize(Beam startingBeam, Tile[][] grid)
+    {
         Stack<Beam> beams = new Stack<Beam>();
-        beams.Push(new Beam(-1, 0, Direction.Right));
+        beams.Push(startingBeam);
 
         while (beams.TryPop(out Beam? beam))
         {
@@ -43,10 +94,18 @@ internal static class Program
             }
         }
         
-        DrawBeams(grid);
-        DrawEnergized(grid);
-        
         return (uint)grid.SelectMany(line => line).Count(tile => tile.IsEnergized);
+    }
+
+    private static void Reset(Tile[][] grid)
+    {
+        foreach (Tile[] line in grid)
+        {
+            foreach (Tile tile in line)
+            {
+                tile.Reset();
+            }
+        }
     }
 
     private static void DrawEnergized(Tile[][] grid)
@@ -188,8 +247,6 @@ internal static class Program
         public bool IsEnergized { get; private set; }
         public IReadOnlyList<Direction> Directions => directions;
 
-        public void Energize() => IsEnergized = true;
-        
         /// <summary>
         /// Marks this tile as energized by a laser and adds the beams
         /// <paramref name="direction"/> to the list of <see cref="Directions"/>,
@@ -205,10 +262,15 @@ internal static class Program
                 directions.Add(direction);
                 return true;
             }
-
             return false;
         }
-
+        
+        public void Reset()
+        {
+            IsEnergized = false;
+            directions.Clear();
+        }
+        
         private readonly List<Direction> directions = new();
     }
 }
