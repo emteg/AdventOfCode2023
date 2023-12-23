@@ -68,7 +68,8 @@ Card 6: 31 18 13 56 72 | 74 77 10 23 35 67 36 11");
                 (State.ReadCardNumber,      _, true)  => Continue(),
                 
                 (State.ReadWinningNumber,   _, false) => FinishNumber(winningNumbers, State.SearchWinningNumber),
-                (State.ReadCardNumber,      _, false) => FinishNumber(numbers, State.SearchCardNumber)
+                (State.ReadCardNumber,      _, false) => FinishNumber(numbers, State.SearchCardNumber),
+                _ => throw new InvalidOperationException()
             };
         }
 
