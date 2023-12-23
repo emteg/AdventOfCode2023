@@ -11,6 +11,11 @@ internal sealed record CompareAndForwardRule : ComparePartRatingRule
         ForwardWorkflowName = forwardWorkflowName;
         this.enqueueWorkflowCallback = enqueueWorkflowCallback;
     }
+    
+    public override string ToString()
+    {
+        return $"{RatingToCompare}{(AcceptWhenLessThan ? "<" : ">")}{Threshold}:{ForwardWorkflowName}";
+    }
 
     protected override void PartMatches(Part part)
     {

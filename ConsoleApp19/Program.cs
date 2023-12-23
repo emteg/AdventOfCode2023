@@ -5,23 +5,13 @@ using Util;
 
 internal static class Program
 {
-    private static Dictionary<string, Workflow> workflows = new();
-    private static Queue<(string workflowName, Part part)> queuedParts = new();
-    
+    private static readonly Queue<(string workflowName, Part part)> QueuedParts = new();
+
     public static void Main(string[] args)
     {
         Console.WriteLine("Hello, World!");
 
-        TextReader test = new StringReader(@"in{s<1351:px,qqz}
-px{a<2006:qkq,m>2090:A,rfg}
-qkq{x<1416:A,crn}
-crn{x>2662:A,R}
-rfg{s<537:R,x>2440:R,A}
-qqz{s>2770:A,m<1801:hdj,R}
-hdj{m>838:A,pv}
-pv{a>1716:R,A}");
-
-        TextReader sample = new StringReader(@"px{a<2006:qkq,m>2090:A,rfg}
+        string sample = @"px{a<2006:qkq,m>2090:A,rfg}
 pv{a>1716:R,A}
 lnx{m>1548:A,A}
 rfg{s<537:gd,x>2440:R,A}
@@ -37,105 +27,25 @@ hdj{m>838:A,pv}
 {x=1679,m=44,a=2067,s=496}
 {x=2036,m=264,a=79,s=2244}
 {x=2461,m=1339,a=466,s=291}
-{x=2127,m=1623,a=2188,s=1013}");
+{x=2127,m=1623,a=2188,s=1013}";
 
-        //Part1(sample);
-        //Part1(File.OpenText("input.txt"));
+        Part1(new StringReader(sample));
+        Part1(File.OpenText("input.txt"));
 
-        List<Workflow> wfs = ReadWorkflows(test.EnumerateLines()).ToList();
-        SimplifyWorkflows(wfs);
-        workflows.Clear();
-        
-        foreach (Workflow workflow in wfs) 
-            workflows.Add(workflow.Name, workflow);
-
-        Queue<(RatingRange, string?)> queue = new();
-        queue.Enqueue((new RatingRange(), "in"));
-
-        List<RatingRange> finishedRanges = new();
-        while (queue.TryDequeue(out (RatingRange range, string? wfName) item))
-        {
-            if (item.wfName is null && item.range.IsAccepted)
-                finishedRanges.Add(item.range);
-            else if (item.wfName is not null)
-            {
-                Workflow workflow = workflows[item.wfName];
-                foreach ((RatingRange range, string? wfName) tuple in PassRatingThroughWorkflow(item.range, workflow))
-                    queue.Enqueue((tuple.range, tuple.wfName));
-            }
-        }
+        Part2(new StringReader(sample));
+        Part2(File.OpenText("input.txt"));
     }
     
-    private static IEnumerable<(RatingRange, string?)> PassRatingThroughWorkflow(RatingRange rating, Workflow workflow)
-    {
-        foreach (Rule rule in workflow.Rules)
-        {
-            if (rule is CompareAndForwardRule cafRule)
-            {
-                (RatingRange left, rating) = rating.WithRange(cafRule.RatingToCompare, cafRule.AcceptWhenLessThan, cafRule.Threshold);
-                yield return (left, cafRule.ForwardWorkflowName);
-                continue;
-            }
-
-            if (rule is ForwardRule fwdRule)
-            {
-                yield return (rating, fwdRule.ForwardWorkflowName);
-                continue;
-            }
-
-            if (rule is CompareAndAcceptRule caRule)
-            {
-                (RatingRange left, rating) = rating.WithRange(caRule.RatingToCompare, caRule.AcceptWhenLessThan, caRule.Threshold);
-                if (caRule.AcceptWhenLessThan)
-                    rating.IsAccepted = true;
-                else
-                    left.IsAccepted = true;
-                yield return (left, null);
-                continue;
-            }
-
-            if (rule is CompareAndRejectRule crRule)
-            {
-                (RatingRange left, rating) = rating.WithRange(crRule.RatingToCompare, crRule.AcceptWhenLessThan, crRule.Threshold);
-                yield return (left, null);
-                continue;
-            }
-
-            if (rule is RejectRule)
-            {
-                yield return (rating, null);
-                continue;
-            }
-
-            if (rule is AcceptRule)
-            {
-                rating.IsAccepted = true;
-                yield return (rating, null);
-                continue;
-            }
-
-            throw new NotImplementedException();
-        }
-    }
-
     private static void Part1(TextReader sample)
     {
-        workflows.Clear();
-        queuedParts.Clear();
-        List<Part> parts = ReadWorkflowsAndParts(sample.EnumerateLines())
+        Dictionary<string, Workflow> workflows = new();
+        List<Part> parts = ReadWorkflowsAndParts(sample.EnumerateLines(), workflows)
             .ToList();
 
-        // not very efficient...
-        List<Workflow> wfs = workflows.Values.ToList();
-        SimplifyWorkflows(wfs);
-        workflows.Clear();
-        foreach (Workflow workflow in wfs) 
-            workflows.Add(workflow.Name, workflow);
-        
         foreach (Part part in parts) 
-            queuedParts.Enqueue(("in", part));
+            QueuedParts.Enqueue(("in", part));
 
-        while (queuedParts.TryDequeue(out (string workflowName, Part part) entry)) 
+        while (QueuedParts.TryDequeue(out (string workflowName, Part part) entry)) 
             workflows[entry.workflowName].Execute(entry.part);
         
         Console.WriteLine(parts
@@ -144,122 +54,101 @@ hdj{m>838:A,pv}
             .Sum());
     }
 
-    private static void SimplifyWorkflows(List<Workflow> wfs)
+    private static void Part2(TextReader input)
     {
-        while (true)
+        Dictionary<string, Workflow> workflows = new();
+
+        List<Workflow> wfs = ReadWorkflows(input.EnumerateLines()).ToList();
+
+        foreach (Workflow workflow in wfs)
+            workflows.Add(workflow.Name, workflow);
+
+        Queue<(RatingRange, string?)> queue = new();
+        queue.Enqueue((new RatingRange(), "in"));
+
+        List<RatingRange> acceptedRanges = new();
+        while (queue.TryDequeue(out (RatingRange range, string? wfName) item))
         {
-            bool changeWasMade = false;
-
-            for (int i = wfs.Count - 1; i >= 0; i--)
+            if (item.wfName is null && item.range.IsAccepted)
+                acceptedRanges.Add(item.range);
+            else if (item.wfName is not null)
             {
-                if (wfs[i].Rules.All(rule => rule is AcceptRule or CompareAndAcceptRule))
-                {
-                    RemoveAcceptingWorkflow(wfs, i);
-                    changeWasMade = true;
-                    continue;
-                }
+                Workflow workflow = workflows[item.wfName];
+                foreach ((RatingRange range, string? wfName) tuple in PassRatingThroughWorkflow(item.range, workflow))
+                    queue.Enqueue((tuple.range, tuple.wfName));
+            }
+        }
 
-                if (wfs[i].Rules.All(rule => rule is RejectRule or CompareAndRejectRule))
-                {
-                    RemoveRejectingWorkflow(wfs, i);
-                    changeWasMade = true;
-                    continue;
-                }
+        Console.WriteLine(acceptedRanges.Sum(r => r.Combinations()));
+    }
+
+    private static IEnumerable<(RatingRange, string?)> PassRatingThroughWorkflow(RatingRange rating, Workflow workflow)
+    {
+        foreach (Rule rule in workflow.Rules)
+        {
+            if (rule is CompareAndForwardRule cafRule)
+            {
+                (RatingRange left, rating) = rating.WithRange(cafRule.RatingToCompare, cafRule.AcceptWhenLessThan, cafRule.Threshold);
+                left.RuleApplied(workflow, rule);
+                rating.RuleApplied(workflow, workflow.Rules.IndexOf(rule));
+                yield return (left, cafRule.ForwardWorkflowName);
+                continue;
             }
 
-            if (!changeWasMade)
-                break;
+            if (rule is ForwardRule fwdRule)
+            {
+                rating.RuleApplied(workflow, rule);
+                yield return (rating, fwdRule.ForwardWorkflowName);
+                continue;
+            }
+
+            if (rule is CompareAndAcceptRule caRule)
+            {
+                (RatingRange left, rating) = rating.WithRange(caRule.RatingToCompare, caRule.AcceptWhenLessThan, caRule.Threshold);
+                left.RuleApplied(workflow, rule);
+                rating.RuleApplied(workflow, workflow.Rules.IndexOf(rule));
+                if (caRule.AcceptWhenLessThan && left.GetRange(caRule.RatingToCompare).End.Value < caRule.Threshold)
+                    left.IsAccepted = true;
+                else if (caRule.AcceptWhenLessThan && left.GetRange(caRule.RatingToCompare).Start.Value >= caRule.Threshold)
+                    rating.IsAccepted = true;
+                else if (!caRule.AcceptWhenLessThan &&
+                         left.GetRange(caRule.RatingToCompare).Start.Value >= caRule.Threshold)
+                    left.IsAccepted = true;
+                else
+                    rating.IsAccepted = true;
+                yield return (left, null);
+                continue;
+            }
+
+            if (rule is CompareAndRejectRule crRule)
+            {
+                (RatingRange left, rating) = rating.WithRange(crRule.RatingToCompare, crRule.AcceptWhenLessThan, crRule.Threshold);
+                left.RuleApplied(workflow, rule);
+                rating.RuleApplied(workflow, workflow.Rules.IndexOf(rule));
+                yield return (left, null);
+                continue;
+            }
+
+            if (rule is RejectRule)
+            {
+                rating.RuleApplied(workflow, rule);
+                yield return (rating, null);
+                continue;
+            }
+
+            if (rule is AcceptRule)
+            {
+                rating.IsAccepted = true;
+                rating.RuleApplied(workflow, rule);
+                yield return (rating, null);
+                continue;
+            }
+
+            throw new InvalidOperationException();
         }
     }
 
-    private static void RemoveAcceptingWorkflow(List<Workflow> wfs, int index)
-    {
-        Workflow workflow = wfs[index];
-
-        Console.WriteLine($"Workflow {workflow.Name} accepts everything.");
-
-        List<Workflow> workflowsToUpdate = wfs
-            .Where(it => it.Rules.Any(rule => IsForwardOrCompareAndForwardRule(rule, workflow.Name)))
-            .ToList();
-                    
-        foreach (Workflow workflowToUpdate in workflowsToUpdate)
-        {
-            Console.WriteLine($"\tUpdating {workflowToUpdate.Name} to not forwarding to {workflow.Name}");
-            for (int j = 0; j < workflowToUpdate.Rules.Count; j++)
-            {
-                if (IsForwardRule(workflowToUpdate.Rules[j], workflow.Name))
-                {
-                    Console.WriteLine($"\tReplacing ForwardRule {j} with AcceptRule");
-                    workflowToUpdate.ReplaceRule(j, new AcceptRule());
-                }
-                else if (IsCompareAndForwardRule(workflowToUpdate.Rules[j], workflow.Name))
-                {
-                    CompareAndForwardRule r = (CompareAndForwardRule)workflowToUpdate.Rules[j];
-                    Console.WriteLine($"\tReplacing CompareAndForwardRule {j} with CompareAndAcceptRule");
-                    workflowToUpdate.ReplaceRule(j, new CompareAndAcceptRule(r.RatingToCompare, r.AcceptWhenLessThan, r.Threshold));
-                }
-            }
-        }
-                    
-        wfs.RemoveAt(index);
-        Console.WriteLine("\tWorkflow deleted.");
-    }
-
-    private static void RemoveRejectingWorkflow(List<Workflow> wfs, int index)
-    {
-        Workflow workflow = wfs[index];
-
-        Console.WriteLine($"Workflow {workflow.Name} rejects everything.");
-
-        List<Workflow> workflowsToUpdate = wfs
-            .Where(it => it.Rules.Any(rule => IsForwardOrCompareAndForwardRule(rule, workflow.Name)))
-            .ToList();
-                    
-        foreach (Workflow workflowToUpdate in workflowsToUpdate)
-        {
-            Console.WriteLine($"\tUpdating {workflowToUpdate.Name} to not forwarding to {workflow.Name}");
-            for (int j = 0; j < workflowToUpdate.Rules.Count; j++)
-            {
-                if (IsForwardRule(workflowToUpdate.Rules[j], workflow.Name))
-                {
-                    Console.WriteLine($"\tReplacing ForwardRule {j} with RejectRule");
-                    workflowToUpdate.ReplaceRule(j, new RejectRule());
-                }
-                else if (IsCompareAndForwardRule(workflowToUpdate.Rules[j], workflow.Name))
-                {
-                    CompareAndForwardRule r = (CompareAndForwardRule)workflowToUpdate.Rules[j];
-                    Console.WriteLine($"\tReplacing CompareAndForwardRule {j} with CompareAndRejectRule");
-                    workflowToUpdate.ReplaceRule(j, new CompareAndRejectRule(r.RatingToCompare, r.AcceptWhenLessThan, r.Threshold));
-                }
-            }
-        }
-                    
-        wfs.RemoveAt(index);
-        Console.WriteLine("\tWorkflow deleted.");
-    }
-
-    private static bool IsForwardOrCompareAndForwardRule(Rule rule, string name)
-    {
-        if (IsForwardRule(rule, name))
-            return true;
-
-        if (IsCompareAndForwardRule(rule, name))
-            return true;
-
-        return false;
-    }
-
-    private static bool IsCompareAndForwardRule(Rule rule, string name)
-    {
-        return rule is CompareAndForwardRule compRule && compRule.ForwardWorkflowName == name;
-    }
-
-    private static bool IsForwardRule(Rule rule, string name)
-    {
-        return rule is ForwardRule fwdRule && fwdRule.ForwardWorkflowName == name;
-    }
-
-    private static IEnumerable<Part> ReadWorkflowsAndParts(IEnumerable<string> lines)
+    private static IEnumerable<Part> ReadWorkflowsAndParts(IEnumerable<string> lines, Dictionary<string, Workflow> workflows)
     {
         bool readWorkflows = true;
         foreach (string line in lines)
@@ -288,7 +177,7 @@ hdj{m>838:A,pv}
 
     private static void EnqueueWorkflowCallback(string workflowName, Part part)
     {
-        queuedParts.Enqueue((workflowName, part));
+        QueuedParts.Enqueue((workflowName, part));
     }
 }
 
@@ -308,6 +197,8 @@ internal sealed record RatingRange
     public Range S { get; private set; } = new(1, 4000);
 
     public bool IsAccepted = false;
+    public string Workflows => string.Join(", ", workflows);
+    public string Rules => string.Join(", ", rules);
 
     public (RatingRange, RatingRange) WithRange(PartRating rating, bool acceptWhenLessThan, uint threshold)
     {
@@ -337,11 +228,34 @@ internal sealed record RatingRange
         Range rightS = rating is PartRating.S ? rightNewRange : new Range(S.Start, S.End);
 
         return (
-            new RatingRange { X = leftX, M = leftM, A = leftA, S = leftS }, 
-            new RatingRange { X = rightX, M = rightM, A = rightA, S = rightS });
+            new RatingRange { X = leftX, M = leftM, A = leftA, S = leftS, workflows = new List<string>(workflows)}, 
+            new RatingRange { X = rightX, M = rightM, A = rightA, S = rightS, workflows = new List<string>(workflows) });
     }
 
-    private Range GetRange(PartRating rating)
+    public long Combinations()
+    {
+        long result = 1;
+        foreach (PartRating rating in Enum.GetValues<PartRating>())
+        {
+            Range range = GetRange(rating);
+            result *= (range.End.Value - range.Start.Value + 1);
+        }
+        return result;
+    }
+
+    public void RuleApplied(Workflow workflow, Rule rule)
+    {
+        workflows.Add(workflow.Name);
+        rules.Add(rule.ToString());
+    }
+    
+    public void RuleApplied(Workflow workflow, int ruleIndex)
+    {
+        workflows.Add(workflow.Name);
+        rules.Add(ruleIndex.ToString());
+    }
+
+    public Range GetRange(PartRating rating)
     {
         return rating switch
         {
@@ -353,19 +267,8 @@ internal sealed record RatingRange
         };
     }
 
-    private void SetRange(PartRating rating, int start, int end)
-    {
-        Range range = new(start, end);
-        
-        if (rating is PartRating.X)
-            X = range;
-        else if (rating is PartRating.M)
-            M = range;
-        else if (rating is PartRating.A)
-            A = range;
-        else
-            S = range;
-    }
+    private List<string> workflows = new();
+    private List<string> rules = new();
 }
 
 internal sealed record Workflow(string Name, List<Rule> Rules)

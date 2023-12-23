@@ -36,6 +36,8 @@ internal sealed record AcceptRule : Rule
         part.Accept();
         return true;
     }
+    
+    public override string ToString() => "A";
 }
 
 internal sealed record RejectRule : Rule
@@ -45,4 +47,6 @@ internal sealed record RejectRule : Rule
         part.Reject();
         return true;
     }
+    
+    public override string ToString() => "R";
 }

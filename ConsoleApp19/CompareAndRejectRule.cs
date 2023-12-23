@@ -7,4 +7,9 @@ internal sealed record CompareAndRejectRule : ComparePartRatingRule
     { }
 
     protected override void PartMatches(Part part) => part.Reject();
+    
+    public override string ToString()
+    {
+        return $"{RatingToCompare}{(AcceptWhenLessThan ? "<" : ">")}{Threshold}:R";
+    }
 }

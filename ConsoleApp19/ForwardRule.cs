@@ -1,20 +1,11 @@
 ﻿namespace ConsoleApp19;
 
-internal sealed record ForwardRule : Rule
+internal sealed record ForwardRule(string ForwardWorkflowName, Action<string, Part> EnqueueWorkflowCallback) : Rule
 {
-    public string ForwardWorkflowName { get; }
-
-    public Action<string, Part> EnqueueWorkflowCallback { get; }
-
-    public ForwardRule(string forwardWorkflowName, Action<string, Part> enqueueWorkflowCallback)
-    {
-        ForwardWorkflowName = forwardWorkflowName;
-        EnqueueWorkflowCallback = enqueueWorkflowCallback;
-    }
-
     public override bool Apply(Part part)
     {
         EnqueueWorkflowCallback(ForwardWorkflowName, part);
         return true;
     }
+    public override string ToString() => ForwardWorkflowName;
 }
