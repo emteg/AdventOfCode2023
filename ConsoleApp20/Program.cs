@@ -1,6 +1,5 @@
 ﻿// See https://aka.ms/new-console-template for more information
 
-using System.Diagnostics;
 using Util;
 
 internal static class Program
@@ -15,7 +14,7 @@ internal static class Program
 %c -> inv
 &inv -> a");
 
-        //Console.WriteLine(Part1(sampleInput1.EnumerateLines()));
+        Console.WriteLine(Part1(sampleInput1.EnumerateLines()));
 
         TextReader sampleInput2 = new StringReader(@"broadcaster -> a
 %a -> inv, con
@@ -23,79 +22,11 @@ internal static class Program
 %b -> con
 &con -> output");
         
-        //Console.WriteLine(Part1(sampleInput2.EnumerateLines()));
+        Console.WriteLine(Part1(sampleInput2.EnumerateLines()));
         
-        //Console.WriteLine(Part1(File.OpenText("input.txt").EnumerateLines()));
+        Console.WriteLine(Part1(File.OpenText("input.txt").EnumerateLines()));
 
-        // resets after 3733 button pushes
-        TextReader shiftRegister1 = new StringReader(@"broadcaster -> br
-%br -> vn, jz
-%jz -> qs
-%qs -> vn, ps
-%ps -> xm
-%xm -> vn, ht
-%ht -> pp
-%pp -> mq
-%mq -> vn, zc
-%zc -> zv
-%zv -> dc, vn
-%dc -> mg, vn
-%mg -> vn
-&vn -> br, jz, ht, ps, zc, pp, ds");
-        
-        // resets after 3797 button pushes
-        TextReader shiftRegister2 = new StringReader(@"broadcaster -> bh
-%bh -> qd, vv
-%qd -> xb
-%xb -> bl, vv
-%bl -> bb
-%bb -> nb, vv
-%nb -> dv
-%dv -> vv, hr
-%hr -> dm, vv
-%dm -> kg
-%kg -> mr, vv
-%mr -> vv, pz
-%pz -> vv
-&vv -> dm, bl, sb, nb, qd, bh");
-        
-        // resets after 3917 button pushes
-        TextReader shiftRegister3 = new StringReader(@"broadcaster -> fg
-%fg -> nt, gt
-%gt -> jc
-%jc -> nt, nk
-%nk -> rq, nt
-%rq -> ft
-%ft -> fh
-%fh -> nt, xz
-%xz -> dr
-%dr -> xd, nt
-%xd -> nt, lm
-%lm -> nt, qn
-%qn -> nt
-&nt -> rq, fg, ft, nd, gt, xz");
-        
-        // resets after 3877 button pushes
-        TextReader shiftRegister4 = new StringReader(@"broadcaster -> pj
-%pj -> zj, zq
-%zj -> cf
-%cf -> gr, zq
-%gr -> ln
-%ln -> rm
-%rm -> zq, fs
-%fs -> ff
-%ff -> cl
-%cl -> fp, zq
-%fp -> rd, zq
-%rd -> nc, zq
-%nc -> zq
-&zq -> fs, gr, ff, hf, ln, zj, pj
-");
-
-        Console.WriteLine(Part2(shiftRegister4.EnumerateLines()));
-        
-        // the answer to part 2 is the least common multiple of the button pushes required to
-        // reset each of the shift registers
+        Console.WriteLine(Part2(File.OpenText("input.txt").EnumerateLines()));
     }
 
     private static ulong Part1(IEnumerable<string> lines)
@@ -115,30 +46,45 @@ internal static class Program
         return lowPulsesSent * highPulsesSent;
     }
     
-    private static uint Part2(IEnumerable<string> lines)
+    private static ulong Part2(IEnumerable<string> lines)
     {
-        lowPulsesSent = 0;
-        highPulsesSent = 0;
-        
         List<Module> modules = CreateModules(lines);
-        ButtonModule button = new(PulseSent);
-        button.ConnectTo((ReceivingModule)modules.First(it => it.Name == "broadcaster"));
 
-        Queue<Module> moduleQueue = new();
+        BroadcastModule broadcaster = modules
+            .Where(module => module is BroadcastModule)
+            .Cast<BroadcastModule>()
+            .First();
 
-        uint count = 0;
-        while (true)
+        IEnumerable<ulong> shiftRegisterStartModules = modules
+            .Where(module => module is FlipFlopModule)
+            .Cast<FlipFlopModule>()
+            .Where(module => broadcaster.Outputs.Contains(module))
+            .Select(DetectShiftRegisterResetButtonPushCount)
+            .Select(it => (ulong)it);
+        
+        return shiftRegisterStartModules.LeastCommonMultiple();
+    }
+
+    private static ushort DetectShiftRegisterResetButtonPushCount(FlipFlopModule? module)
+    {
+        List<FlipFlopModule> shiftRegisterFlipFlops = new();
+        while (module is not null)
         {
-            lowPulsesSentToRx = 0;
-            highPulsesSentToRx = 0;
-            PushButton(button, moduleQueue);
-            count++;
-
-            if (lowPulsesSentToRx == 1)
-                break;
+            shiftRegisterFlipFlops.Add(module);
+            module = (FlipFlopModule?)module.Outputs.FirstOrDefault(it => it is FlipFlopModule);
         }
 
-        return count;
+        return shiftRegisterFlipFlops
+            .Select(flipFlop => flipFlop.Outputs.Any(output => output is ConjunctionModule))
+            .Reverse()
+            .Aggregate((ushort)0, ShiftAndSetBit);
+    }
+
+    private static ushort ShiftAndSetBit(ushort acc, bool bit)
+    {
+        acc <<= 1;
+        acc += bit ? (ushort)1 : (ushort)0;
+        return acc;
     }
 
     private static void PushButton(ButtonModule button, Queue<Module> moduleQueue)
