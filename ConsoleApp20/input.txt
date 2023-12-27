@@ -55,4 +55,4 @@ broadcaster -> pj, fg, bh, br
 %ff -> cl
 %dr -> xd, nt
 %ln -> rm
-%dc -> mg, vn
+%dc -> mg, vn%
