@@ -8,14 +8,80 @@ internal static class Program
     {
         Console.WriteLine("Hello, World!");
 
-        string sample1 = @"broadcaster -> a, b, c
+        TextReader sampleInput1 = new StringReader(@"broadcaster -> a, b, c
 %a -> b
 %b -> c
 %c -> inv
-&inv -> a";
+&inv -> a");
 
-        TextReader sampleInput1 = new StringReader(sample1);
-        List<Module> modules = CreateModules(sampleInput1.EnumerateLines());
+        //Console.WriteLine(Part1(sampleInput1.EnumerateLines()));
+
+        TextReader sampleInput2 = new StringReader(@"broadcaster -> a
+%a -> inv, con
+&inv -> b
+%b -> con
+&con -> output");
+        
+        //Console.WriteLine(Part1(sampleInput2.EnumerateLines()));
+        
+        //Console.WriteLine(Part1(File.OpenText("input.txt").EnumerateLines()));
+        
+        Console.WriteLine(Part2(File.OpenText("input.txt").EnumerateLines()));
+    }
+
+    private static ulong Part1(IEnumerable<string> lines)
+    {
+        lowPulsesSent = 0;
+        highPulsesSent = 0;
+        
+        List<Module> modules = CreateModules(lines);
+        ButtonModule button = new(PulseSent);
+        button.ConnectTo((ReceivingModule)modules.First(it => it.Name == "broadcaster"));
+
+        Queue<Module> moduleQueue = new();
+
+        for (int i = 0; i < 1000; i++) 
+            PushButton(button, moduleQueue);
+
+        return lowPulsesSent * highPulsesSent;
+    }
+    
+    private static uint Part2(IEnumerable<string> lines)
+    {
+        lowPulsesSent = 0;
+        highPulsesSent = 0;
+        
+        List<Module> modules = CreateModules(lines);
+        ButtonModule button = new(PulseSent);
+        button.ConnectTo((ReceivingModule)modules.First(it => it.Name == "broadcaster"));
+
+        Queue<Module> moduleQueue = new();
+
+        uint count = 0;
+        while (true)
+        {
+            lowPulsesSentToRx = 0;
+            highPulsesSentToRx = 0;
+            PushButton(button, moduleQueue);
+            count++;
+
+            if (lowPulsesSentToRx == 1)
+                break;
+        }
+
+        return count;
+    }
+
+    private static void PushButton(ButtonModule button, Queue<Module> moduleQueue)
+    {
+        foreach (Module module in button.Push()) 
+            moduleQueue.Enqueue(module);
+
+        while (moduleQueue.TryDequeue(out Module? module))
+        {
+            foreach (Module mod in module.Update()) 
+                moduleQueue.Enqueue(mod);
+        }
     }
 
     private static List<Module> CreateModules(IEnumerable<string> input)
@@ -27,9 +93,24 @@ internal static class Program
             modules.Add(module.Name, (module, outputs));
         }
 
-        return new List<Module>();
-    }
+        Dictionary<string, Module> allModules = modules
+            .Select(it => new KeyValuePair<string, Module>(it.Key, it.Value.module))
+            .ToDictionary(it => it.Key, it => it.Value);
+        
+        foreach ((_, (Module module, string[] outputs) value) in modules)
+        {
+            foreach (string outModuleName in value.outputs)
+            {
+                if (!allModules.ContainsKey(outModuleName))
+                    allModules.Add(outModuleName, new OutputModule(outModuleName, PulseSent));
+                    
+                value.module.ConnectTo((ReceivingModule)allModules[outModuleName]);
+            }
+        }
 
+        return allModules.Values.ToList();
+    }
+    
     private static (Module module, string[] outputs) CreateModule(string line)
     {
         string[] parts = line.Split(" -> ");
@@ -48,9 +129,27 @@ internal static class Program
         throw new InvalidOperationException();
     }
 
+    private static uint lowPulsesSent = 0;
+    private static uint highPulsesSent = 0;
+    private static uint lowPulsesSentToRx = 0;
+    private static uint highPulsesSentToRx = 0;
+
     private static void PulseSent(string senderModuleName, bool isHigh, string receivingModuleName)
     {
-        Console.WriteLine($"{senderModuleName} -{(isHigh ? "high" : "low")}-> {receivingModuleName}");
+        //Console.WriteLine($"{senderModuleName} -{(isHigh ? "high" : "low")}-> {receivingModuleName}");
+
+        if (isHigh)
+            highPulsesSent++;
+        else
+            lowPulsesSent++;
+
+        if (receivingModuleName == "rx")
+        {
+            if (isHigh)
+                highPulsesSentToRx++;
+            else
+                lowPulsesSentToRx++;
+        }
     }
 }
 
@@ -69,10 +168,11 @@ internal abstract class Module
     /// Adds the given <paramref name="other"/> Module to its outputs and informs the other module that this
     /// module is going to be one of its inputs.
     /// </summary>
-    public void ConnectTo(ReceivingModule other)
+    public Module ConnectTo(ReceivingModule other)
     {
         outputs.Add(other);
         other.ConnectFrom(this);
+        return this;
     }
     
     /// <summary> Updates its internal state and returns all modules that pulses were sent to (if any).</summary>
